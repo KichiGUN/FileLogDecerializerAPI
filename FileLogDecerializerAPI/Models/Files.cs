@@ -2,7 +2,7 @@
 
 namespace FileLogDecerializerAPI.Models
 {
-    public class File
+    public class Files
     {
         [Required]
         public string filename { get; set; }
