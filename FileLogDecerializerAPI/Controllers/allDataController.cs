@@ -11,9 +11,13 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Microsoft.Net.Http.Headers;
 using System.Reflection;
+using System.Net;
+using System.Web;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Diagnostics;
+using System.Linq;
 
-///TODO newErrors - необходимо разобраться почему возникает ошибка при десериализации переданных данных
-///TODO рефакторинг кода (как минимум errors/{id} надо исправить чтоб под условия тз подходил и все дубли кода исправить надо)
 
 namespace FileLogDecerializerAPI.Controllers
 {
@@ -38,7 +42,7 @@ namespace FileLogDecerializerAPI.Controllers
         {
             using (StreamReader r = new StreamReader(filePath))
             {
-                var entity = JsonConvert.DeserializeObject<Entity>(r.ReadToEnd()); //Позже перепишу это извращение, хочу сегодня все методы сделать, а потом уже делать их красивыми
+                var entity = JsonConvert.DeserializeObject<Entity>(r.ReadToEnd()); 
                 
                 if (entity.scan == null) return null;
 
@@ -59,7 +63,7 @@ namespace FileLogDecerializerAPI.Controllers
         }
        
        [HttpGet("errors")]
-        public List<ErrorsDto> GetErrors()
+        public List<ErrorsDto> GetErrors(int? index)
         {
             using (StreamReader r = new StreamReader(filePath))
             {
@@ -83,8 +87,27 @@ namespace FileLogDecerializerAPI.Controllers
                         fileDtos.Add(fileDto);
                     }
                 }
+                try
+                {
+                    if (index.HasValue)
+                    {
+                        List<ErrorsDto> tmpList = new List<ErrorsDto>();
+                        if (index.Value >= fileDtos.Count())
+                            throw new Exception("В файле находится меньше ошибок, чем указано в индексе");
 
-                return fileDtos;
+                        tmpList.Add(fileDtos.ElementAt(Convert.ToInt32(index.Value)));
+
+                        return tmpList;
+                    }
+                    else
+                    {
+                        return fileDtos;
+                    }
+                }
+                catch(Exception ex)
+                {
+                    return null;
+                }
             }
         }
 
@@ -96,41 +119,6 @@ namespace FileLogDecerializerAPI.Controllers
                 var entity = JsonConvert.DeserializeObject<Entity>(r.ReadToEnd());
 
                 return entity.scan.errorCount;
-            }
-        }
-
-        [HttpGet("errors/1")]
-        public ErrorsDto GetErrorsForIndex(int index)
-        {
-            using (StreamReader r = new StreamReader(filePath))
-            {
-                var entity = JsonConvert.DeserializeObject<Entity>(r.ReadToEnd());
-
-                var filesWithError = entity.files.Where(x => x.result == false && x.errors.Count() > 0).ToList();
-
-                var fileDtos = new List<ErrorsDto>();
-
-                foreach (var file in filesWithError)
-                {
-                    foreach (var error in file.errors)
-                    {
-                        var fileDto = new ErrorsDto
-                        {
-                            filename = file.filename,
-                            errorDesc = error.error,
-                            result = file.result
-                        };
-
-                        fileDtos.Add(fileDto);
-                    }
-                }
-
-                if (fileDtos.Count() - 1 <= index)
-                    return null;
-                else
-                {
-                    return fileDtos.ElementAt(index);
-                }
             }
         }
 
@@ -151,17 +139,34 @@ namespace FileLogDecerializerAPI.Controllers
                     errors = tmpFiles.Where(x => x.result == false).Count(),
                     filenames = tmpFiles.Where(x => x.result == false).Select(x => x.filename).ToList()
                 };
+
                 return queryCheckDto;
             }
-            
         }
 
         [HttpPost("newErrors")]
-        public String PostRequestAsync(JObject json) 
+        public async Task<IActionResult> ReceiveJsonAsync(JsonValue json)
         {
-            var scan = JsonConvert.SerializeObject(json);
-            return scan;
+            Entity entity = null;
+            try
+            {
+                entity = json.Deserialize<Entity>();
+                if (entity.scan == null || entity.files == null)
+                    throw new Exception("Неверный формат JSON-файла");
 
+                string filePath = Path.Combine(AppContext.BaseDirectory, "Data", DateTime.Now.ToString("dd-MM-yyyy_HH-mm-ss") + ".json");
+
+                await using (StreamWriter file = new StreamWriter(filePath))
+                {
+                    string jsonModel = JsonConvert.SerializeObject(entity);
+                    await file.WriteAsync(jsonModel);
+                }
+                return Ok();
+            }
+            catch(Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Ошибка при сохранении файла: " + ex.Message);
+            }
         }
 
         [HttpGet("service/serviceInfo")]
