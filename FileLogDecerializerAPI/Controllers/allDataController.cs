@@ -19,8 +19,6 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 
 
-
-
 namespace FileLogDecerializerAPI.Controllers
 {
     [Route("api/")]
