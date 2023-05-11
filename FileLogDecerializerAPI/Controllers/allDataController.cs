@@ -29,27 +29,60 @@ namespace FileLogDecerializerAPI.Controllers
         private Entity entity = null;
 
         [HttpGet("allData")]
-        public Entity Get()// Запрос на выдачу файла с данными без изменений
+        public async Task<IActionResult> Get()// Запрос на выдачу файла с данными без изменений
         {
-            return this.FileReader();
+            try
+            {
+                var data = await Task.Run(() => FileReader());
+                if (data == null) return NotFound();
+
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         [HttpGet("scan")]
-        public Scan GetScans() // Запрос на блок scan из JSON-а
+        public async Task<IActionResult> GetScans() // Запрос на блок scan из JSON-а
         {
-            return this.FileReader().scan;
+            try
+            {
+                var data = await Task.Run(() => FileReader().scan);
+                if (data == null) return NotFound();
+
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         [HttpGet("filenames")] 
-        public List<string> GetCorrectFiles(Boolean value) // Массив со всеми файлами, который прошли без ошибки или с ошибкой
+        public async  Task<IActionResult> GetCorrectFiles(Boolean? value) // Массив со всеми файлами, который прошли без ошибки или с ошибкой
         {
-            return this.FileReader().files.Where(x => x.result == value).Select(x => x.filename).ToList();
+            try
+            {
+                var data = await Task.Run(() => FileReader().files.Where(x => x.result == value).Select(x => x.filename).ToList());
+               
+                if (data.Count() == 0) return NotFound();
+
+                return Ok(data);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
-       
-       [HttpGet("errors")] 
-        public List<ErrorsDto> GetErrors(int? index) // Может как принимать параметр, так и работать без него. В случае, если параметр указан, то передаются все ошибочные файлы, если указан индекс, то 1
+
+        [HttpGet("errors")]
+        public async Task<IActionResult> GetErrors(int? index) // Может как принимать параметр, так и работать без него. В случае, если параметр указан, то передаются все ошибочные файлы, если указан индекс, то 1
         {
-            var filesWithError = this.FileReader().files.Where(x => x.result == false && x.errors.Count() > 0).ToList();
+            var filesWithError = await Task.Run(() => FileReader().files.Where(x => x.result == false && x.errors.Count() > 0).ToList());
+            
+            if(filesWithError == null) return NotFound();
 
             var fileDtos = new List<ErrorsDto>();
 
@@ -67,42 +100,43 @@ namespace FileLogDecerializerAPI.Controllers
                     fileDtos.Add(fileDto);
                 }
             }
-            try
+            if (index.HasValue)
             {
-                if (index.HasValue)
-                {
-                    List<ErrorsDto> tmpList = new List<ErrorsDto>();
-                    if (index.Value >= fileDtos.Count())
-                        throw new Exception("Ошибок меньше, чем указано в индексе. Ошибок: " + fileDtos.Count());
+                if (index.Value >= fileDtos.Count())
+                    return BadRequest("Индекс вышел за максимальное количество. Макс. количество - " + fileDtos.IndexOf(fileDtos[^1]));
 
-                    tmpList.Add(fileDtos.ElementAt(Convert.ToInt32(index.Value)));
-
-                    return tmpList;
-                }
-                else
-                {
-                    return fileDtos;
-                }
+                return Ok(new List<ErrorsDto> { fileDtos[index.Value] });
             }
-            catch(Exception ex)
+            else
             {
-                Console.WriteLine(ex.Message);
-                return null;
+                return Ok(fileDtos);
             }
         }
 
         [HttpGet("errors/Count")]
-        public int GetErrorsCount() // Выводит число ошибок в файле
+        public async Task<IActionResult> GetErrorsCount() // Выводит число ошибок в файле
         {
-            return this.FileReader().scan.errorCount;
+            try
+            {
+                var data = await Task.Run(() => FileReader().scan);
+                if (data == null) return NotFound();
+
+                return Ok(data.errorCount);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         [HttpGet("query/check")] 
-        public QueryCheckDto GetQueryCheck() // выводит все ошибкb файлов, начинающихся с query_
+        public async Task<IActionResult> GetQueryCheck() // выводит все ошибкb файлов, начинающихся с query_
         {
             Regex regex = new Regex("^query_", RegexOptions.IgnoreCase);
 
-            var tmpFiles = this.FileReader().files.Where(x => regex.IsMatch(x.filename)).ToList();
+            var tmpFiles = await Task.Run(() => FileReader().files.Where(x => regex.IsMatch(x.filename)).ToList());
+
+            if (tmpFiles.Count == 0) return NotFound();
 
             var list = tmpFiles.Where(x => x.result == false).Select(x => x.filename).ToList();
 
@@ -112,10 +146,11 @@ namespace FileLogDecerializerAPI.Controllers
                 correct = tmpFiles.Where(x => x.result == true).Count(),
                 errors = tmpFiles.Where(x => x.result == false).Count()
             };
+
             if(list.Count() > 0)
                 queryCheckDto.filenames = list;
 
-            return queryCheckDto;
+            return Ok(queryCheckDto);
         }
 
         [HttpPost("newErrors")]
