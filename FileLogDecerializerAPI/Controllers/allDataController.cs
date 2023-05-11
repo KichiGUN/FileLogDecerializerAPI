@@ -102,22 +102,22 @@ namespace FileLogDecerializerAPI.Controllers
         [HttpGet("query/check")] 
         public QueryCheckDto GetQueryCheck() // выводит все ошибкb файлов, начинающихся с query_
         {
-                Regex regex = new Regex("^query_", RegexOptions.IgnoreCase);
+            Regex regex = new Regex("^query_", RegexOptions.IgnoreCase);
 
-                var tmpFiles = this.FileReader().files.Where(x => regex.IsMatch(x.filename)).ToList();
+            var tmpFiles = this.FileReader().files.Where(x => regex.IsMatch(x.filename)).ToList();
 
-                var list = tmpFiles.Where(x => x.result == false).Select(x => x.filename).ToList();
+            var list = tmpFiles.Where(x => x.result == false).Select(x => x.filename).ToList();
 
-                var queryCheckDto = new QueryCheckDto
-                {
-                    total = tmpFiles.Count(),
-                    correct = tmpFiles.Where(x => x.result == true).Count(),
-                    errors = tmpFiles.Where(x => x.result == false).Count()
-                };
-                if(list.Count() > 0)
-                    queryCheckDto.filenames = list;
+            var queryCheckDto = new QueryCheckDto
+            {
+                total = tmpFiles.Count(),
+                correct = tmpFiles.Where(x => x.result == true).Count(),
+                errors = tmpFiles.Where(x => x.result == false).Count()
+            };
+            if(list.Count() > 0)
+                queryCheckDto.filenames = list;
 
-                return queryCheckDto;
+            return queryCheckDto;
         }
 
         [HttpPost("newErrors")]
